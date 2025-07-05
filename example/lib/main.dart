@@ -1,125 +1,181 @@
-/*
- * @Description: example
- * @Author: ekibun
- * @Date: 2020-08-08 08:16:51
- * @LastEditors: ekibun
- * @LastEditTime: 2020-12-02 11:28:06
- */
+import 'dart:math';
+
 import 'package:flutter/material.dart';
-
-import 'package:flutter/services.dart';
 import 'package:flutter_qjs/flutter_qjs.dart';
-
-import 'highlight.dart';
+import 'package:flutter_qjs_example/ajv_example.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(MyApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({Key key}) : super(key: key);
+class MyApp extends StatefulWidget {
+  final GlobalKey<ScaffoldState> scaffoldState = GlobalKey();
+
+  MyApp({super.key});
 
   @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'flutter_qjs',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        appBarTheme: AppBarTheme(brightness: Brightness.dark, elevation: 0),
-        backgroundColor: Colors.grey[300],
-        primaryColorBrightness: Brightness.dark,
-      ),
-      routes: {
-        'home': (BuildContext context) => TestPage(),
-      },
-      initialRoute: 'home',
+    return const MaterialApp(
+      home: FlutterJsHomeScreen(),
     );
   }
 }
 
-class TestPage extends StatefulWidget {
+class FlutterJsHomeScreen extends StatefulWidget {
+  const FlutterJsHomeScreen({super.key});
+
   @override
-  State<StatefulWidget> createState() => _TestPageState();
+  State<FlutterJsHomeScreen> createState() => _FlutterJsHomeScreenState();
 }
 
-class _TestPageState extends State<TestPage> {
-  String resp;
-  IsolateQjs engine;
+class _FlutterJsHomeScreenState extends State<FlutterJsHomeScreen> {
+  String _jsResult = '';
 
-  CodeInputController _controller = CodeInputController(
-      text: 'import("hello").then(({default: greet}) => greet("world"));');
+  final JavascriptRuntime javascriptRuntime = getJavascriptRuntime();
 
-  _ensureEngine() async {
-    if (engine != null) return;
-    engine = IsolateQjs(
-      moduleHandler: (String module) async {
-        return await rootBundle.loadString(
-            "js/" + module.replaceFirst(new RegExp(r".js$"), "") + ".js");
-      },
+  String? _quickjsVersion;
+
+  Future<String> evalJS() async {
+    JsEvalResult jsResult = await javascriptRuntime.evaluateAsync(
+      """
+            if (typeof MyClass == 'undefined') {
+              var MyClass = class  {
+                constructor(id) {
+                  this.id = id;
+                }
+                
+                getId() { 
+                  return this.id;
+                }
+              }
+            }
+            async function test() {
+              var obj = new MyClass(1);
+              var jsonStringified = JSON.stringify(obj);
+              var value = Math.trunc(Math.random() * 100).toString();
+              var asyncResult = await sendMessage("getDataAsync", JSON.stringify({"count": Math.trunc(Math.random() * 10)}));
+              var err;
+              try {
+                await sendMessage("asyncWithError", "{}");
+              } catch(e) {
+                err = e.message || e;
+              }
+              return {"object": jsonStringified, "expression": value, "asyncResult": asyncResult, "expectedError": err};
+            }
+            test();
+            """,
+      sourceUrl: 'script.js',
     );
+    javascriptRuntime.executePendingJob();
+    JsEvalResult asyncResult = await javascriptRuntime.handlePromise(jsResult);
+    return asyncResult.stringResult;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    javascriptRuntime.setInspectable(true);
+    javascriptRuntime.onMessage('getDataAsync', (args) async {
+      await Future.delayed(const Duration(seconds: 1));
+      final int count = args['count'];
+      Random rnd = Random();
+      final result = <Map<String, int>>[];
+      for (int i = 0; i < count; i++) {
+        result.add({'key$i': rnd.nextInt(100)});
+      }
+      return result;
+    });
+    javascriptRuntime.onMessage('asyncWithError', (_) async {
+      await Future.delayed(const Duration(milliseconds: 100));
+      return Future.error('Some error');
+    });
+  }
+
+  @override
+  void dispose() {
+    javascriptRuntime.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("JS engine test"),
+        title: const Text('FlutterJS Example'),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+      body: Center(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  TextButton(
-                      child: Text("evaluate"),
-                      onPressed: () async {
-                        await _ensureEngine();
-                        try {
-                          resp = (await engine.evaluate(_controller.text ?? '',
-                                  name: "<eval>"))
-                              .toString();
-                        } catch (e) {
-                          resp = e.toString();
-                        }
-                        setState(() {});
-                      }),
-                  TextButton(
-                      child: Text("reset engine"),
-                      onPressed: () async {
-                        if (engine == null) return;
-                        await engine.close();
-                        engine = null;
-                      }),
-                ],
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            Text(
+              'JS Evaluate Result:\n\n$_jsResult\n',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(
+              height: 20,
+            ),
+            const Padding(
+              padding: EdgeInsets.all(10),
+              child: Text(
+                  'Click on the big JS Yellow Button to evaluate the expression bellow using the flutter_js plugin'),
+            ),
+            const Padding(
+              padding: EdgeInsets.all(8.0),
+              child: Text(
+                "Math.trunc(Math.random() * 100).toString();",
+                style: TextStyle(
+                    fontSize: 12,
+                    fontStyle: FontStyle.italic,
+                    fontWeight: FontWeight.bold),
               ),
             ),
-            Container(
-              padding: const EdgeInsets.all(12),
-              color: Colors.grey.withOpacity(0.1),
-              constraints: BoxConstraints(minHeight: 200),
-              child: TextField(
-                  autofocus: true,
-                  controller: _controller,
-                  decoration: null,
-                  expands: true,
-                  maxLines: null),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (ctx) => AjvExample(
+                      //widget.javascriptRuntime,
+                      javascriptRuntime),
+                ),
+              ),
+              child: const Text('See Ajv Example'),
             ),
-            SizedBox(height: 16),
-            Text("result:"),
-            SizedBox(height: 16),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              color: Colors.green.withOpacity(0.05),
-              constraints: BoxConstraints(minHeight: 100),
-              child: Text(resp ?? ''),
+            SizedBox.fromSize(size: const Size(double.maxFinite, 20)),
+            ElevatedButton(
+              child: const Text('Fetch Remote Data'),
+              onPressed: () async {
+                var asyncResult = await javascriptRuntime.evaluateAsync("""
+                fetch('https://raw.githubusercontent.com/abner/flutter_js/master/FIXED_RESOURCE.txt').then(response => response.text());
+              """);
+                javascriptRuntime.executePendingJob();
+                final promiseResolved =
+                    await javascriptRuntime.handlePromise(asyncResult);
+                var result = promiseResolved.stringResult;
+                setState(() => _quickjsVersion = result);
+              },
             ),
+            Text(
+              'QuickJS Version\n${_quickjsVersion ?? '<NULL>'}',
+              textAlign: TextAlign.center,
+            )
           ],
         ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        //backgroundColor: Colors.transparent,
+        child: Image.asset('assets/js.ico'),
+        onPressed: () async {
+          final result = await evalJS();
+          if (!mounted) return;
+          setState(() {
+            _jsResult = result;
+          });
+        },
       ),
     );
   }
