@@ -1,22 +1,22 @@
 name: flutter_qjs
 description: This plugin is a simple js engine for flutter using the `quickjs` project. Plugin currently supports all the platforms except web!
-version: 0.3.7
-homepage: https://github.com/ekibun/flutter_qjs
+version: 0.0.1
+homepage: https://github.com/kodjodevf
 
 environment:
-  sdk: ">=2.12.0-0 <3.0.0"
-  flutter: ">=1.20.0"
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
-  ffi: ^1.0.0
+  ffi: ^2.1.2
+
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_tools:
-    sdk: flutter
+
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -46,6 +46,8 @@ flutter:
         pluginClass: FlutterQjsPlugin
       ios:
         pluginClass: FlutterQjsPlugin
+  assets:
+    - assets/js/
     # -------------------
 
   # To add assets to your plugin package, add an assets section, like this:

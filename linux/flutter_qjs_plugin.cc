@@ -10,7 +10,7 @@
 #include <flutter_linux/flutter_linux.h>
 #include <gtk/gtk.h>
 
-#define FLUTTER_QJS_PLUGIN(obj)                                     \
+#define flutter_qjs_plugin(obj)                                     \
   (G_TYPE_CHECK_INSTANCE_CAST((obj), flutter_qjs_plugin_get_type(), \
                               FlutterQjsPlugin))
 
